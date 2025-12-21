@@ -20,11 +20,20 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@langchain/community": "^1.1.1",
+    "@langchain/core": "^1.1.7",
+    "@langchain/langgraph": "^1.0.7",
+    "@langchain/openai": "^1.2.0",
     "@nestjs/common": "^11.0.1",
+    "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/platform-fastify": "^11.1.9",
     "@repo/typescript-config": "workspace:^",
+    "@zilliz/milvus2-sdk-node": "^2.6.6",
+    "ioredis": "^5.8.2",
+    "neo4j-driver": "^6.0.1",
+    "pg": "^8.16.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },
