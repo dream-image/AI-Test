@@ -6,7 +6,6 @@ import { useAsyncEffect, useMount } from 'ahooks'
 
 const createSession = async () => {
   const controller = new AbortController()
-  //@ts-ignore
   const session = await LanguageModel.create({
     monitor(m: any) {
       m.addEventListener('downloadprogress', (e: any) => {
@@ -47,7 +46,6 @@ function App() {
     }
   ])
   const init = async () => {
-    //@ts-ignore
     const res = await LanguageModel.availability({ languages: ["en", "ja"] });
     console.log(res)
     const { session, controller } = await createSession()
