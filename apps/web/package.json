@@ -20,8 +20,8 @@
     "zustand": "^5.0.9"
   },
   "devDependencies": {
-    "@types/dom-chromium-ai": "^0.0.13",
     "@eslint/js": "^9.39.1",
+    "@types/dom-chromium-ai": "^0.0.13",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
@@ -36,6 +36,7 @@
     "tailwindcss": "^4.1.18",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
-    "vite": "npm:rolldown-vite@7.2.5"
+    "vite": "npm:rolldown-vite@7.2.5",
+    "vite-plugin-mkcert": "^1.17.9"
   }
 }
