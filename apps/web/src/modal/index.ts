@@ -7,6 +7,16 @@ let initResolver: (() => void) | null = null;
 let askResolver: ((text: any) => void) | null = null;
 let partialResolver: ((text: string) => void) | null = null;
 
+export type ContentItem =
+    | { type: 'text', text: string }
+    | { type: 'image', image: Blob | ArrayBuffer }
+    | { type: 'audio', audio: Blob | ArrayBuffer };
+
+export type Message = {
+    role: 'user' | 'assistant' | 'system';
+    content: string | ContentItem[];
+};
+
 worker.onmessage = (e) => {
     const { type, text, error } = e.data;
     if (type === 'init-complete') {
@@ -56,62 +66,55 @@ export const init = async () => {
  * @param options 输入参数及可选的流式回调
  */
 export const ask = async (options: {
-    question: string,
-    image?: Blob,
-    audio?: Blob,
+    messages: Message[],
     onPartial?: (token: string) => void
 }) => {
-    const { question, image, audio, onPartial } = options;
+    const { messages, onPartial } = options;
     return new Promise<string>(async (resolve) => {
         askResolver = resolve;
         partialResolver = onPartial || null;
 
-        const payload: any = { question };
+        const processedMessages: any[] = [];
         const transfers: Transferable[] = [];
 
-        // 处理图像数据
-        if (image) {
-            const buffer = await image.arrayBuffer();
-            payload.image = buffer;
-            transfers.push(buffer);
-        }
+        for (const msg of messages) {
+            const newMsg = { ...msg };
+            if (Array.isArray(msg.content)) {
+                const newContent: any[] = [];
+                for (const item of msg.content) {
+                    if (item.type === 'image') {
+                        const buffer = item.image instanceof Blob ? await item.image.arrayBuffer() : item.image;
+                        newContent.push({ type: 'image', image: buffer });
+                        if (buffer instanceof ArrayBuffer) transfers.push(buffer);
+                    } else if (item.type === 'audio') {
+                        try {
+                            const audioBlob = item.audio instanceof Blob ? item.audio : new Blob([item.audio]);
+                            const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+                            const arrayBuffer = await audioBlob.arrayBuffer();
+                            const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+                            const samples = audioBuffer.getChannelData(0);
 
-        // 处理音频数据：主线程预处理（降采样至 16kHz）
-        if (audio) {
-            try {
-                // MediaPipe GenAI 期望 16kHz 的单声道音频
-                const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
-                const arrayBuffer = await audio.arrayBuffer();
-                console.log('Main: 开始解码音频...', audio.size, '字节');
-                const start = Date.now();
-                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-                const samples = audioBuffer.getChannelData(0); // 获取第一声道
-                console.log(`Main: 音频解码完成, 耗时: ${Date.now() - start}ms, 长度: ${audioBuffer.duration.toFixed(2)}s`);
-
-                // 增加振幅检测并拦截
-                let maxAmp = 0;
-                for (let i = 0; i < samples.length; i++) {
-                    const abs = Math.abs(samples[i]);
-                    if (abs > maxAmp) maxAmp = abs;
+                            newContent.push({
+                                type: 'audio',
+                                audio: {
+                                    samples: samples.buffer,
+                                    sampleRate: audioBuffer.sampleRate
+                                }
+                            });
+                            transfers.push(samples.buffer);
+                            await audioCtx.close();
+                        } catch (e) {
+                            console.error('音频提取失败:', e);
+                        }
+                    } else {
+                        newContent.push(item);
+                    }
                 }
-                console.log(`Main: 音频最大振幅: ${maxAmp.toFixed(5)}`);
-
-                if (maxAmp < 0.015) {
-                    await audioCtx.close();
-                    throw new Error('语音信号太弱，请大声一点，或靠近麦克风。');
-                }
-
-                payload.audio = {
-                    samples: samples.buffer, // 发送原始浮动采样数据
-                    sampleRate: audioBuffer.sampleRate
-                };
-                transfers.push(samples.buffer);
-                await audioCtx.close();
-            } catch (e) {
-                console.error('音频解码失败:', e);
+                newMsg.content = newContent;
             }
+            processedMessages.push(newMsg);
         }
 
-        worker.postMessage({ type: 'ask', payload }, transfers);
+        worker.postMessage({ type: 'ask', payload: { messages: processedMessages } }, transfers);
     });
 }

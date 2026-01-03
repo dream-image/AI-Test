@@ -5,6 +5,7 @@ import { Button, Card, CardBody, CardFooter, Spinner, Textarea } from '@heroui/r
 import { useAsyncEffect, useMemoizedFn, useMount, useThrottleFn } from 'ahooks'
 import { isString } from 'es-toolkit'
 import { ask, init as initModal } from './modal'
+import type { Message, ContentItem } from './modal'
 
 function App() {
   const [loading, setLoading] = useState(false)
@@ -25,13 +26,11 @@ function App() {
   // 性能优化：用于存储最新的流式文本，供节流更新使用
   const latestTextRef = useRef("");
 
-  const [message, setMessage] = useState<{
-    role: 'user' | 'assistant' | 'system',
-    content: string | {
-      type: 'image' | 'audio',
-      value: string
-    }[]
-  }[]>([
+  const [message, setMessage] = useState<Message[]>([
+    {
+      role: "system",
+      content: "你是一个端侧多模态助手。你能识别图片、听懂语音并流畅交流。请始终使用中文回答，且回答力求简洁、专业。"
+    },
     {
       role: "assistant",
       content: "我是你的小助手，有什么需要帮忙的？(支持语音、图片上传及流式响应)"
@@ -119,27 +118,40 @@ function App() {
   }
 
   const sendMessage = useMemoizedFn(async () => {
-    if (!text.trim() && !imageBlob && !audioBlob) return;
+    // 1. 构造当前用户输入的 ContentItem 数组
+    const userContent: ContentItem[] = [];
+    if (text.trim()) {
+      userContent.push({ type: 'text', text });
+    }
+    if (imageBlob) {
+      userContent.push({ type: 'image', image: imageBlob });
+    }
+    if (audioBlob) {
+      userContent.push({ type: 'audio', audio: audioBlob });
+    }
 
-    // 1. 添加用户消息
-    const userQuestion = text || (audioBlob ? "[语音消息]" : "[多模态消息]");
-    setMessage(prev => [...prev, { role: 'user', content: userQuestion }]);
+    if (userContent.length === 0) return;
+
+    const newUserMessage: Message = { role: 'user', content: userContent };
+
+    // 更新消息列表，添加用户新消息和助手的占位消息
+    const updatedMessages = [...message, newUserMessage];
+    const assistantPlaceholder: Message = { role: 'assistant', content: "" };
+
+    setMessage([...updatedMessages, assistantPlaceholder]);
 
     setLoading(true);
     const originalText = text;
     setText('');
     const originalAudio = audioBlob;
-    clearAudio(); // 发送时清除预览
+    // clearAudio(); // 发送时清除预览
 
     // 2. 准备流式接收助手消息
     latestTextRef.current = "";
-    setMessage(prev => [...prev, { role: 'assistant', content: "" }]);
 
     try {
       const res = await ask({
-        question: originalText || "请分析我提供的多模态信息",
-        image: imageBlob || undefined,
-        audio: originalAudio || undefined,
+        messages: updatedMessages,
         onPartial: (token) => {
           latestTextRef.current += token;
           throttledUpdateMessage(latestTextRef.current);
@@ -172,9 +184,21 @@ function App() {
         <CardBody className='min-h-[300px] gap-2'>
           {
             message?.filter(i => i.role !== 'system')?.map?.((i, index) => {
+              const displayContent = () => {
+                if (typeof i.content === 'string') {
+                  return i.content || (loading && index === (message.filter(m => m.role !== 'system').length - 1) ? '正在思考...' : '');
+                }
+                return i.content.map((item, idx) => {
+                  if (item.type === 'text') return <div key={idx}>{item.text}</div>;
+                  if (item.type === 'image') return <div key={idx}>[图片内容]</div>;
+                  if (item.type === 'audio') return <div key={idx}>[语音内容]</div>;
+                  return null;
+                });
+              };
+
               return <div key={index} className={`${i.role === 'user' ? ' text-end' : ''} w-full py-1 `}>
                 <div className={`inline-block px-3 py-2 rounded-lg ${i.role === 'user' ? 'bg-blue-500 text-white shadow-sm' : 'bg-gray-100 shadow-sm border border-gray-200'}`}>
-                  {isString(i.content) ? (i.content || (loading && index === message.length - 1 ? '正在思考...' : '')) : '[多模态内容]'}
+                  {displayContent()}
                 </div>
               </div>
             })

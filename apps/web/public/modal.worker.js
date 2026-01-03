@@ -75,46 +75,43 @@ self.onmessage = async (e) => {
             return;
         }
         try {
-            // 2. 构造指令与多模态数据
-            const hasMedia = !!(payload.image || payload.audio);
-            const userQuestion = payload.question || (hasMedia ? "请分析这段多模态数据" : "你好");
-
-            // 构造符合 Gemma-3 的交错式多模态输入数组
+            const { messages } = payload;
             const inputPayload = [];
 
-            // 1. 系统指令 (独立 Turn)
-            inputPayload.push(`<start_of_turn>system
-你叫“小助手”，是一个端侧多模态助手。你能够识别图像内容、理解音频指令，并回答各类问题。
+            for (const msg of messages) {
+                const { role, content } = msg;
+                inputPayload.push(`<start_of_turn>${role}\n`);
 
-当用户询问你的身份或功能时，请直接、简洁地介绍自己，无需复述或分析用户的问题。回答应保持专业并始终使用中文。
-<end_of_turn>`);
-
-            // 2. 移除 user 提示词前缀，让模型更自然地衔接
-
-            // 2. 用户输入 (独立 Turn)
-            inputPayload.push("<start_of_turn>user\n");
-
-            if (payload.image && isImageSupported) {
-                const blob = new Blob([payload.image]);
-                const imageBitmap = await createImageBitmap(blob);
-                inputPayload.push("<img>\n");
-                inputPayload.push({ imageSource: imageBitmap });
-            }
-
-            if (payload.audio && isAudioSupported) {
-                const samples = new Float32Array(payload.audio.samples);
-                inputPayload.push("<u>\n");
-                inputPayload.push({
-                    audioSource: {
-                        audioSamples: samples,
-                        audioSampleRateHz: payload.audio.sampleRate
+                if (typeof content === 'string') {
+                    inputPayload.push(content);
+                } else if (Array.isArray(content)) {
+                    for (const item of content) {
+                        if (item.type === 'text') {
+                            inputPayload.push(item.text);
+                        } else if (item.type === 'image' && isImageSupported) {
+                            const blob = new Blob([item.image]);
+                            const imageBitmap = await createImageBitmap(blob);
+                            inputPayload.push("<img>\n");
+                            inputPayload.push({ imageSource: imageBitmap });
+                        } else if (item.type === 'audio' && isAudioSupported) {
+                            const samples = new Float32Array(item.audio.samples);
+                            inputPayload.push("<u>\n");
+                            inputPayload.push({
+                                audioSource: {
+                                    audioSamples: samples,
+                                    audioSampleRateHz: item.audio.sampleRate
+                                }
+                            });
+                        }
                     }
-                });
+                }
+                inputPayload.push(`<end_of_turn>\n`);
             }
 
-            inputPayload.push(`${userQuestion}<end_of_turn>\n<start_of_turn>model\n`);
+            // 添加模型回复的起始标记
+            inputPayload.push(`<start_of_turn>model\n`);
 
-            // 日志确认：过滤掉大的 ArrayBuffer 以免卡顿，但在日志中标记存在
+            // 日志确认
             const logPayload = inputPayload.map(item => {
                 if (typeof item === 'string') return item;
                 if (item.imageSource) return `[ImageBitmap ${item.imageSource.width}x${item.imageSource.height}]`;
