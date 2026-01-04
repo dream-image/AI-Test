@@ -98,22 +98,14 @@ export const ask = async (options: {
                     } else if (item.type === 'audio') {
                         try {
                             const audioBlob = item.audio instanceof Blob ? item.audio : new Blob([item.audio]);
-                            const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
-                            const arrayBuffer = await audioBlob.arrayBuffer();
-                            const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-                            const samples = audioBuffer.getChannelData(0);
+                            const audioUrl = URL.createObjectURL(audioBlob);
 
                             newContent.push({
                                 type: 'audio',
-                                audio: {
-                                    samples: samples.buffer,
-                                    sampleRate: audioBuffer.sampleRate
-                                }
+                                audio: audioUrl
                             });
-                            transfers.push(samples.buffer);
-                            await audioCtx.close();
                         } catch (e) {
-                            console.error('音频提取失败:', e);
+                            console.error('音频URL转换失败:', e);
                         }
                     } else {
                         newContent.push(item);

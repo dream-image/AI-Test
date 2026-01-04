@@ -283,7 +283,15 @@ self.onmessage = async (e) => {
             const logPayload = inputPayload.map(item => {
                 if (typeof item === 'string') return item;
                 if (item.imageSource) return `[图片位图 ${item.imageSource.width}x${item.imageSource.height}]`;
-                if (item.audioSource) return `[该音频包含 ${item.audioSource.audioSamples.length} 个采样点 @ ${item.audioSource.audioSampleRateHz}Hz]`;
+                if (item.audioSource) {
+                    if (typeof item.audioSource === 'string') {
+                        return `[音频URL: ${item.audioSource}]`;
+                    }
+                    if (item.audioSource.audioSamples) {
+                        return `[该音频包含 ${item.audioSource.audioSamples.length} 个采样点 @ ${item.audioSource.audioSampleRateHz}Hz]`;
+                    }
+                    return '[未知音频对象]';
+                }
                 return '[未知对象]';
             });
             console.log('Worker: 发送推理请求 (Payload 详情):', logPayload);
