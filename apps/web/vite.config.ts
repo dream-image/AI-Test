@@ -17,6 +17,8 @@ export default defineConfig({
       },
     }),
     tailwindcss(),
-    mkcert(),
+    mkcert({
+      hosts: ['dev.s.kwaixiaodian.com'],
+    }),
   ],
 })
