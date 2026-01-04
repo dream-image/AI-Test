@@ -108,20 +108,99 @@ async function getAudioFromSource(audio) {
 }
 
 
+const MODEL_URL = 'https://p4-ec.eckwai.com/kcdn/cdn-kcdn112411/llm/gemma-3n-E2B-it-int4-Web.litertlm';
+const CACHE_NAME = 'models';
+const CACHE_KEY = 'gemma-3n-E2B-it-int4-Web.litertlm';
+
+// 从缓存加载或下载模型
+async function loadModel() {
+    try {
+        const cache = await caches.open(CACHE_NAME);
+        const cachedResponse = await cache.match(CACHE_KEY);
+
+        if (cachedResponse) {
+            console.log('Worker: 从缓存中发现模型文件');
+            const blob = await cachedResponse.blob();
+            return { url: URL.createObjectURL(blob), size: blob.size };
+        }
+
+        console.log('Worker: 未发现缓存，开始下载模型...');
+        const response = await fetch(MODEL_URL);
+
+        if (!response.ok) {
+            throw new Error(`模型下载失败，状态码: ${response.status}`);
+        }
+
+        const contentLength = response.headers.get('content-length');
+        if (!contentLength) {
+            console.warn('Worker: 无法获取内容长度，进度将不可用');
+        }
+
+        const total = parseInt(contentLength, 10);
+        let loaded = 0;
+
+        const reader = response.body.getReader();
+        const chunks = [];
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            chunks.push(value);
+            loaded += value.length;
+
+            if (total) {
+                const progress = (loaded / total) * 100;
+                // 每隔一定进度发送一次消息，避免过于频繁
+                self.postMessage({
+                    type: 'init-progress',
+                    progress: progress.toFixed(1),
+                    loaded,
+                    total
+                });
+            }
+        }
+
+        console.log('Worker: 模型下载完成，正在组装 Blob...');
+        const blob = new Blob(chunks);
+
+        // 存入缓存
+        try {
+            console.log('Worker: 正在写入缓存...');
+            await cache.put(CACHE_KEY, new Response(blob));
+            console.log('Worker: 缓存写入成功');
+        } catch (cacheErr) {
+            console.error('Worker: 缓存写入失败 (非致命错误)', cacheErr);
+        }
+
+        return { url: URL.createObjectURL(blob), size: blob.size };
+    } catch (err) {
+        throw new Error(`加载模型失败: ${err.message}`);
+    }
+}
+
 self.onmessage = async (e) => {
     const { type, payload } = e.data;
 
     if (type === 'init') {
         try {
             console.log('Worker: 开始初始化...');
+
+            // 加载模型文件
+            const { url: modelUrl, size: modelSize } = await loadModel();
+
             const genaiFileset = await FilesetResolver.forGenAiTasks(
                 '/lib/mediapipe/wasm'
             );
+            // console.log('modelBuffer', modelBuffer); // This line is commented out as modelBuffer is no longer used
 
             // 尝试开启全功能多模态（语音+视觉）
             try {
                 llmInference = await LlmInference.createFromOptions(genaiFileset, {
-                    baseOptions: { modelAssetPath: './gemma-3n-E2B-it-int4-Web.litertlm' },
+                    baseOptions: {
+                        modelAssetPath: modelUrl,
+                        delegate: 'GPU'
+                    },
                     temperature: 0.4,
                     topK: 30,
                     maxTokens: 1024,
@@ -132,26 +211,27 @@ self.onmessage = async (e) => {
                 isImageSupported = true;
                 console.log('Worker: 多模态模型（语音+视觉）加载成功');
             } catch (innerErr) {
-                // 如果报错 "model_data is nullptr"，说明权重文件太小，不支持多模态
-                if (innerErr.message && innerErr.message.includes('model_data is nullptr')) {
-                    console.warn('Worker: 当前权重文件不支持多模态功能，正在尝试以降级模式（仅限文本）启动...');
-                    llmInference = await LlmInference.createFromOptions(genaiFileset, {
-                        baseOptions: { modelAssetPath: './weights.bin' },
-                        temperature: 0.4,
-                        topK: 30,
-                        maxTokens: 1024
-                    });
-                    isAudioSupported = false;
-                    isImageSupported = false;
-                    console.log('Worker: 纯文本模型加载完成');
-                } else {
-                    throw innerErr;
-                }
+                console.error('Worker: 多模态加载失败，尝试纯文本模式...', innerErr);
+                // 降级重试：使用相同的 buffer
+                llmInference = await LlmInference.createFromOptions(genaiFileset, {
+                    baseOptions: {
+                        modelAssetPath: modelUrl,
+                        delegate: 'GPU'
+                    },
+                    temperature: 0.4,
+                    topK: 30,
+                    maxTokens: 1024
+                });
+                isAudioSupported = false;
+                isImageSupported = false;
+                console.log('Worker: 纯文本模型加载完成');
             }
 
             self.postMessage({
                 type: 'init-complete',
-                capabilities: { audio: isAudioSupported, image: isImageSupported }
+                capabilities: { audio: isAudioSupported, image: isImageSupported },
+                modelSize,
+                modelName: CACHE_KEY
             });
         } catch (err) {
             console.error('Worker 初始化致命错误:', err);

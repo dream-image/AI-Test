@@ -14,6 +14,22 @@ function App() {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
   const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null)
 
+  const [modelSize, setModelSize] = useState<number>(0)
+  const [modelName, setModelName] = useState<string>('')
+  const [memoryUsage, setMemoryUsage] = useState<number>(0)
+
+  // 监控内存使用
+  useEffect(() => {
+    const timer = setInterval(() => {
+      // @ts-ignore
+      const memory = window.performance?.memory;
+      if (memory) {
+        setMemoryUsage(memory.usedJSHeapSize);
+      }
+    }, 2000);
+    return () => clearInterval(timer);
+  }, []);
+
   // 录音相关状态
   const [isRecording, setIsRecording] = useState(false)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -174,12 +190,87 @@ function App() {
     }
   })
 
+  // 模型加载进度
+  const [modelReady, setModelReady] = useState(false)
+  const [progress, setProgress] = useState(0)
+
+  // ... existing states ...
+
   useMount(() => {
-    initModal()
+    initModal((p) => {
+      setProgress(p)
+    }).then((res) => {
+      setModelReady(true)
+      setModelSize(res?.size || 0)
+      setModelName(res?.name || '')
+    })
   })
+
+  // 如果模型未就绪，显示加载进度界面
+  if (!modelReady) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gray-50 from-gray-50 to-gray-100">
+        <Card className="w-full max-w-md p-6 shadow-xl">
+          <div className="flex flex-col items-center gap-4">
+            <Spinner size="lg" color="primary" />
+            <div className="flex flex-col items-center gap-1 w-full">
+              <h2 className="text-xl font-bold text-gray-800">正在启动多模态助手</h2>
+              <p className="text-sm text-gray-500">首次加载模型文件较大 (约2GB)，请耐心等待...</p>
+            </div>
+
+            {progress > 0 && (
+              <div className="w-full space-y-2">
+                <div className="flex justify-between text-xs text-gray-500 px-1">
+                  <span>下载中...</span>
+                  <span>{progress.toFixed(1)}%</span>
+                </div>
+                <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-blue-500 transition-all duration-300 ease-out"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <p className="text-xs text-center text-gray-400 max-w-[80%]">
+              模型将缓存至浏览器本地，下次访问可秒级启动
+            </p>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
 
   return (
     <div className="p-4 max-w-4xl mx-auto">
+      {/* 状态监控栏 */}
+      <div className="mb-4 p-2 bg-gray-50 border border-gray-200 rounded-lg flex justify-between items-center text-xs text-gray-600 shadow-sm">
+        <div className="flex gap-4">
+          <div className="flex items-center gap-1">
+            <span className="font-semibold text-gray-800">📦 模型大小:</span>
+            <span>{modelSize ? formatBytes(modelSize) : '未知'}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="font-semibold text-gray-800">🧠 页面 JS 内存:</span>
+            <span className={`${memoryUsage > 500 * 1024 * 1024 ? 'text-orange-500 font-bold' : ''}`}>
+              {memoryUsage ? formatBytes(memoryUsage) : '不可用'}
+            </span>
+          </div>
+        </div>
+        <div>
+          <span className="text-gray-400">{modelName || 'Gemma-2B-Int4'} (GPU 加速)</span>
+        </div>
+      </div>
+
       <Card>
         <CardBody className='min-h-[300px] gap-2'>
           {

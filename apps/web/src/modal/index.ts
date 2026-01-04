@@ -3,7 +3,9 @@ import Toastify from 'toastify-js'
 
 const worker = new Worker('/modal.worker.js');
 
-let initResolver: (() => void) | null = null;
+// @ts-ignore
+let initResolver: ((info: { size: number, name: string }) => void) | null = null;
+let initProgressCallback: ((progress: number, loaded: number, total: number) => void) | null = null;
 let askResolver: ((text: any) => void) | null = null;
 let partialResolver: ((text: string) => void) | null = null;
 
@@ -18,7 +20,7 @@ export type Message = {
 };
 
 worker.onmessage = (e) => {
-    const { type, text, error } = e.data;
+    const { type, text, error, progress, loaded, total, modelSize, modelName } = e.data;
     if (type === 'init-complete') {
         const caps = e.data.capabilities;
         let statusText = "大模型加载完毕 (纯文本模式)";
@@ -37,8 +39,13 @@ worker.onmessage = (e) => {
                 background: caps?.audio ? "#4CAF50" : "#FF9800",
             }
         }).showToast();
-        initResolver?.();
+        initResolver?.({ size: modelSize, name: modelName });
         initResolver = null;
+        initProgressCallback = null;
+    } else if (type === 'init-progress') {
+        if (initProgressCallback) {
+            initProgressCallback(Number(progress), loaded, total);
+        }
     } else if (type === 'ask-partial') {
         partialResolver?.(text);
     } else if (type === 'ask-complete') {
@@ -48,15 +55,17 @@ worker.onmessage = (e) => {
     } else if (type === 'error') {
         console.error('Worker 错误:', error);
         initResolver = null;
+        initProgressCallback = null;
         askResolver = null;
         partialResolver = null;
         alert('加载或推理出错: ' + error);
     }
 };
 
-export const init = async () => {
-    return new Promise<void>((resolve) => {
+export const init = async (onProgress?: (progress: number, loaded: number, total: number) => void) => {
+    return new Promise<{ size: number, name: string }>((resolve) => {
         initResolver = resolve;
+        initProgressCallback = onProgress || null;
         worker.postMessage({ type: 'init' });
     });
 }
