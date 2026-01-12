@@ -7,7 +7,7 @@ import mkcert from 'vite-plugin-mkcert'
 export default defineConfig({
   server: {
     host: true,
-    https: {},
+    // https: {},
     port: 443,
   },
   plugins: [
@@ -17,8 +17,8 @@ export default defineConfig({
       },
     }),
     tailwindcss(),
-    mkcert({
-      hosts: ['dev.s.kwaixiaodian.com'],
-    }),
+    // mkcert({
+    //   hosts: ['dev.s.kwaixiaodian.com'],
+    // }),
   ],
 })

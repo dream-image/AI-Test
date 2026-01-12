@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@heroui/react": "2.8.7",
+    "@huggingface/transformers": "^3.8.1",
     "@mediapipe/tasks-genai": "^0.10.25",
     "@tailwindcss/vite": "^4.1.18",
     "ahooks": "^3.9.6",
