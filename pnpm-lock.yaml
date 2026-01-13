@@ -166,6 +166,9 @@ importers:
       dayjs:
         specifier: ^1.11.19
         version: 1.11.19
+      fetch-in-chunks:
+        specifier: ^1.4.0
+        version: 1.4.0
       framer-motion:
         specifier: ^12.23.26
         version: 12.23.26(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -4212,6 +4215,9 @@ packages:
 
   fecha@4.2.3:
     resolution: {integrity: sha512-OP2IUU6HeYKJi3i0z4A19kHMQoLVs4Hc+DPqqxI2h/DPZHTm/vjsfC6P0b4jCMy14XizLBqvndQ+UilD7707Jw==}
+
+  fetch-in-chunks@1.4.0:
+    resolution: {integrity: sha512-NzNVvuInB0vADQYhuf8S6I9JciOFv/C4FC9RXPUCgE0I0jG1DH8HvZOaMPoGSPicaKhpdl5y5r1KGbTrCKRQ9Q==}
 
   fflate@0.8.2:
     resolution: {integrity: sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A==}
@@ -11551,6 +11557,8 @@ snapshots:
       picomatch: 4.0.3
 
   fecha@4.2.3: {}
+
+  fetch-in-chunks@1.4.0: {}
 
   fflate@0.8.2: {}
 

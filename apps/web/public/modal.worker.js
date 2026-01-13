@@ -111,6 +111,162 @@ async function getAudioFromSource(audio) {
 const MODEL_URL = 'https://p4-ec.eckwai.com/kcdn/cdn-kcdn112411/llm/gemma-3n-E2B-it-int4-Web.litertlm';
 const CACHE_NAME = 'models';
 const CACHE_KEY = 'gemma-3n-E2B-it-int4-Web.litertlm';
+const CHUNK_CACHE_PREFIX = 'chunk_';
+
+/**
+ * 支持断点续传的分块下载
+ * 每个块下载完成后立即缓存，刷新页面后可以复用已下载的块
+ * 优化点：平滑进度显示 + 任务池并发控制
+ */
+async function downloadWithResume(url, options = {}) {
+    const { maxParallelRequests = 6, chunkSize = 10 * 1024 * 1024, progressCallback } = options;
+
+    // 获取文件大小
+    const headResponse = await fetch(url, { method: 'HEAD' });
+    if (!headResponse.ok) {
+        throw new Error(`无法获取文件信息: ${headResponse.status}`);
+    }
+
+    const contentLength = headResponse.headers.get('content-length');
+    if (!contentLength) {
+        throw new Error('服务器不支持 Content-Length，无法使用分块下载');
+    }
+
+    const fileSize = parseInt(contentLength, 10);
+    console.log(`Worker: 文件大小 ${(fileSize / 1024 / 1024).toFixed(2)} MB，分块大小 ${(chunkSize / 1024 / 1024).toFixed(2)} MB`);
+
+    // 计算分块范围
+    const chunks = [];
+    for (let start = 0; start < fileSize; start += chunkSize) {
+        const end = Math.min(start + chunkSize - 1, fileSize - 1);
+        chunks.push({ start, end, index: chunks.length });
+    }
+
+    console.log(`Worker: 总共 ${chunks.length} 个分块`);
+
+    const cache = await caches.open(CACHE_NAME);
+    const results = new Array(chunks.length);
+    const chunkStatus = new Array(chunks.length).fill(false);
+    const chunkProgress = new Array(chunks.length).fill(0);
+
+    const reportTotalProgress = () => {
+        if (!progressCallback) return;
+        const totalDownloaded = chunkProgress.reduce((sum, val) => sum + val, 0);
+        progressCallback(totalDownloaded, fileSize);
+    };
+
+    // 检查已缓存的分块
+    let cachedCount = 0;
+    for (let i = 0; i < chunks.length; i++) {
+        const chunkKey = `${CHUNK_CACHE_PREFIX}${CACHE_KEY}_${i}`;
+        const cachedChunk = await cache.match(chunkKey);
+        if (cachedChunk) {
+            const arrayBuffer = await cachedChunk.arrayBuffer();
+            results[i] = arrayBuffer;
+            chunkStatus[i] = true;
+            chunkProgress[i] = arrayBuffer.byteLength;
+            cachedCount++;
+        }
+    }
+
+    if (cachedCount > 0) {
+        console.log(`Worker: 发现 ${cachedCount}/${chunks.length} 个已缓存的分块，继续下载剩余部分...`);
+        reportTotalProgress();
+    }
+
+    // 下载单个分块（流式读取，平滑进度）
+    const downloadChunk = async (chunk) => {
+        const { start, end, index } = chunk;
+        if (chunkStatus[index]) return results[index];
+
+        const response = await fetch(url, {
+            headers: { 'Range': `bytes=${start}-${end}` }
+        });
+
+        if (!response.ok && response.status !== 206) {
+            throw new Error(`分块 ${index} 下载失败: ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const fullContent = new Uint8Array((end - start) + 1);
+        let receivedBytes = 0;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            fullContent.set(value, receivedBytes);
+            receivedBytes += value.length;
+
+            // 实时更新该块进度并汇报总进度（节流：每 100KB 或完成时报告）
+            chunkProgress[index] = receivedBytes;
+            if (receivedBytes % (100 * 1024) < value.length || receivedBytes === (end - start) + 1) {
+                reportTotalProgress();
+            }
+        }
+
+        const arrayBuffer = fullContent.buffer;
+        results[index] = arrayBuffer;
+        chunkStatus[index] = true;
+
+        // 立即缓存该分块
+        const chunkKey = `${CHUNK_CACHE_PREFIX}${CACHE_KEY}_${index}`;
+        try {
+            await cache.put(chunkKey, new Response(arrayBuffer.slice(0)));
+            console.log(`Worker: 分块 ${index + 1}/${chunks.length} 已持久化缓存`);
+        } catch (e) {
+            console.warn(`Worker: 分块 ${index} 持久化失败`, e);
+        }
+
+        return arrayBuffer;
+    };
+
+    // 任务池并发控制（确保始终有 6 个并行下载）
+    const pendingChunks = chunks.filter(chunk => !chunkStatus[chunk.index]);
+
+    if (pendingChunks.length > 0) {
+        console.log(`Worker: 需要下载 ${pendingChunks.length} 个分块`);
+
+        // 使用闭包确保每个 worker 安全地获取下一个待处理的分块
+        let nextChunkIndex = 0;
+        const getNextChunk = () => {
+            if (nextChunkIndex < pendingChunks.length) {
+                return pendingChunks[nextChunkIndex++];
+            }
+            return null;
+        };
+
+        const workers = Array(Math.min(maxParallelRequests, pendingChunks.length)).fill(null).map(async () => {
+            let chunk;
+            while ((chunk = getNextChunk()) !== null) {
+                await downloadChunk(chunk);
+            }
+        });
+
+        await Promise.all(workers);
+    } else {
+        console.log('Worker: 所有分块已从缓存恢复，无需下载');
+    }
+
+    console.log('Worker: 所有分块准备就绪，正在合并主 Blob...');
+    reportTotalProgress(); // 确保最终进度为 100%
+    return new Blob(results);
+}
+
+/**
+ * 清理分块缓存
+ */
+async function clearChunkCache() {
+    const cache = await caches.open(CACHE_NAME);
+    const keys = await cache.keys();
+    const chunkKeys = keys.filter(req => req.url.includes(CHUNK_CACHE_PREFIX));
+
+    for (const key of chunkKeys) {
+        await cache.delete(key);
+    }
+
+    console.log(`Worker: 已清理 ${chunkKeys.length} 个分块缓存`);
+}
 
 // 从缓存加载或下载模型
 async function loadModel() {
@@ -119,56 +275,41 @@ async function loadModel() {
         const cachedResponse = await cache.match(CACHE_KEY);
 
         if (cachedResponse) {
-            console.log('Worker: 从缓存中发现模型文件');
+            console.log('Worker: 从缓存中发现完整模型文件');
             const blob = await cachedResponse.blob();
+
+            // 清理分块缓存（因为已有完整文件）
+            await clearChunkCache();
+
             return { url: URL.createObjectURL(blob), size: blob.size };
         }
 
-        console.log('Worker: 未发现缓存，开始下载模型...');
-        const response = await fetch(MODEL_URL);
+        console.log('Worker: 未发现完整缓存，开始分块下载模型（支持断点续传）...');
 
-        if (!response.ok) {
-            throw new Error(`模型下载失败，状态码: ${response.status}`);
-        }
-
-        const contentLength = response.headers.get('content-length');
-        if (!contentLength) {
-            console.warn('Worker: 无法获取内容长度，进度将不可用');
-        }
-
-        const total = parseInt(contentLength, 10);
-        let loaded = 0;
-
-        const reader = response.body.getReader();
-        const chunks = [];
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            chunks.push(value);
-            loaded += value.length;
-
-            if (total) {
-                const progress = (loaded / total) * 100;
-                // 每隔一定进度发送一次消息，避免过于频繁
+        // 使用支持断点续传的下载
+        const blob = await downloadWithResume(MODEL_URL, {
+            maxParallelRequests: 6,
+            chunkSize: 10 * 1024 * 1024, // 固定 10MB 每块
+            progressCallback: (downloaded, total) => {
+                const progress = (downloaded / total) * 100;
                 self.postMessage({
                     type: 'init-progress',
                     progress: progress.toFixed(1),
-                    loaded,
+                    loaded: downloaded,
                     total
                 });
             }
-        }
+        });
 
-        console.log('Worker: 模型下载完成，正在组装 Blob...');
-        const blob = new Blob(chunks);
+        console.log('Worker: 模型下载完成，正在写入完整缓存...');
 
-        // 存入缓存
+        // 存入完整文件缓存
         try {
-            console.log('Worker: 正在写入缓存...');
             await cache.put(CACHE_KEY, new Response(blob));
-            console.log('Worker: 缓存写入成功');
+            console.log('Worker: 完整缓存写入成功');
+
+            // 清理分块缓存
+            await clearChunkCache();
         } catch (cacheErr) {
             console.error('Worker: 缓存写入失败 (非致命错误)', cacheErr);
         }
