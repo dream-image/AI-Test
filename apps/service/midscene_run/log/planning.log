@@ -1,0 +1,43 @@
+[2026-02-03T21:59:56.412+08:00] actionInActionSpace matched {
+  name: 'Tap',
+  description: 'Tap the element',
+  interfaceAlias: 'aiTap',
+  paramSchema: ZodObject {
+    spa: [Function: bound safeParseAsync] AsyncFunction,
+    _def: {
+      shape: [Function: shape],
+      unknownKeys: 'strip',
+      catchall: [ZodNever],
+      typeName: 'ZodObject'
+    },
+    parse: [Function: bound parse],
+    safeParse: [Function: bound safeParse],
+    parseAsync: [Function: bound parseAsync] AsyncFunction,
+    safeParseAsync: [Function: bound safeParseAsync] AsyncFunction,
+    refine: [Function: bound refine],
+    refinement: [Function: bound refinement],
+    superRefine: [Function: bound superRefine],
+    optional: [Function: bound optional],
+    nullable: [Function: bound nullable],
+    nullish: [Function: bound nullish],
+    array: [Function: bound array],
+    promise: [Function: bound promise],
+    or: [Function: bound or],
+    and: [Function: bound and],
+    transform: [Function: bound transform],
+    brand: [Function: bound brand],
+    default: [Function: bound default],
+    catch: [Function: bound catch],
+    describe: [Function: bound describe],
+    pipe: [Function: bound pipe],
+    readonly: [Function: bound readonly],
+    isNullable: [Function: bound isNullable],
+    isOptional: [Function: bound isOptional],
+    '~standard': { version: 1, vendor: 'zod', validate: [Function: validate] },
+    _cached: null,
+    nonstrict: [Function: passthrough],
+    augment: [Function: extend]
+  },
+  call: [AsyncFunction (anonymous)]
+}
+[2026-02-03T21:59:56.413+08:00] locateFields [ 'locate' ]

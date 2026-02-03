@@ -1,0 +1,18 @@
+[2026-02-03T21:59:51.058+08:00] setting includeBboxInPlanning to true
+[2026-02-03T21:59:51.102+08:00] writeOutActionDumps /Users/xieyi07/Desktop/self/AI-test/apps/service/midscene_run/report/page-over-chrome-extension-bridge-2026-02-03_21-59-50-d68bb406.html
+[2026-02-03T21:59:51.109+08:00] writeOutActionDumps /Users/xieyi07/Desktop/self/AI-test/apps/service/midscene_run/report/page-over-chrome-extension-bridge-2026-02-03_21-59-50-d68bb406.html
+[2026-02-03T21:59:51.115+08:00] writeOutActionDumps /Users/xieyi07/Desktop/self/AI-test/apps/service/midscene_run/report/page-over-chrome-extension-bridge-2026-02-03_21-59-50-d68bb406.html
+[2026-02-03T21:59:51.115+08:00] Using commonContextParser
+[2026-02-03T21:59:52.297+08:00] will get screenshot scale
+[2026-02-03T21:59:52.297+08:00] will get image info of base64
+[2026-02-03T21:59:52.582+08:00] image info of base64 done
+[2026-02-03T21:59:52.583+08:00] Computed screenshot scale 2 from screenshot width 4112 and page width 2056
+[2026-02-03T21:59:52.583+08:00] computedScreenshotScale 2
+[2026-02-03T21:59:52.583+08:00] Applying computed screenshot scale: 2 (resize to logical size)
+[2026-02-03T21:59:52.583+08:00] Resizing screenshot to 2056x1266
+[2026-02-03T21:59:56.415+08:00] Using commonContextParser
+[2026-02-03T21:59:58.269+08:00] will get screenshot scale
+[2026-02-03T21:59:58.269+08:00] computedScreenshotScale 2
+[2026-02-03T21:59:58.269+08:00] Applying computed screenshot scale: 2 (resize to logical size)
+[2026-02-03T21:59:58.269+08:00] Resizing screenshot to 2056x1266
+[2026-02-03T21:59:58.791+08:00] writeOutActionDumps /Users/xieyi07/Desktop/self/AI-test/apps/service/midscene_run/report/page-over-chrome-extension-bridge-2026-02-03_21-59-50-d68bb406.html

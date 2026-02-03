@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { GraphModule } from './graph/graph.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { MidsceneModule } from './midscene/midscene.module';
 
 @Module({
   imports: [
@@ -10,7 +11,8 @@ import { AppService } from './app.service';
       envFilePath: '.dev.env',
       isGlobal: true,
     }),
-    GraphModule,
+    MidsceneModule,
+    // GraphModule,
   ],
   controllers: [AppController],
   providers: [AppService],
