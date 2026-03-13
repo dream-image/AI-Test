@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import { MidsceneService } from './index.service';
-import { GraphController } from './index.controller';
+import { MidsceneService } from './index.service.js';
+import { GraphController } from './index.controller.js';
 
 @Module({
     providers: [MidsceneService],
